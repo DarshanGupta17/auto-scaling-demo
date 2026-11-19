@@ -2,6 +2,10 @@
 
 Run a **real** auto-scaling stack on your laptop: Flask app instances in Docker, **Nginx** load balancing, and a Python **autoscaler** that creates and stops containers based on load. Includes a web **dashboard** with live metrics and an event log.
 
+## Video Demo
+https://github.com/user-attachments/assets/5f882e87-6960-4d5b-97d5-ce4d70188926
+
+
 ## Run it in 3 steps (after clone)
 
 ### 1. Prerequisites
