@@ -8,16 +8,12 @@ Run a **real** auto-scaling stack on your laptop: Flask app instances in Docker,
 
 Recorded walkthrough of the visualizer: instance cards, utilization bars, traffic slider, and containers scaling up and down.
 
-**After you clone the repo**, open the file locally:
-
-- **File:** [`docs/scale-inout.mp4`](docs/scale-inout.mp4)  
-- Or play from the project root: `docs/scale-inout.mp4`
-
-<video controls src="docs/scale-inout.mp4" width="100%">
-  Your browser does not support embedded video. Open <a href="docs/scale-inout.mp4">docs/scale-inout.mp4</a> after cloning.
+<video controls muted playsinline width="100%" src="https://pub-e1f0ebf03c3f42028d5d4a6e994206a9.r2.dev/scale%20INOUT.mp4">
+  Your browser does not support embedded video.
+  <a href="https://pub-e1f0ebf03c3f42028d5d4a6e994206a9.r2.dev/scale%20INOUT.mp4">Open the demo video</a> in a new tab.
 </video>
 
-> On GitHub’s web UI, if the player does not load, use **Raw** on the file page or download [`docs/scale-inout.mp4`](docs/scale-inout.mp4).
+[Open demo video in full screen](https://pub-e1f0ebf03c3f42028d5d4a6e994206a9.r2.dev/scale%20INOUT.mp4) · video plays **muted** by default; use the player controls to unmute.
 
 ---
 
@@ -262,7 +258,7 @@ The autoscaler needs the Docker socket to create/remove containers. Use only on 
 
 ```
 ├── docker-compose.yml
-├── docs/scale-inout.mp4    # demo video
+├── docs/                   # optional local assets
 ├── app/
 ├── autoscaler/
 ├── nginx/
