@@ -253,7 +253,3 @@ The autoscaler needs the Docker socket to create/remove containers. Use only on 
 ├── .env.example
 └── README.md
 ```
-
-## License
-
-MIT — use and modify for learning and demos.
