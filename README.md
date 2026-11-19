@@ -1,17 +1,109 @@
 # Local Auto Scaling Demo
 
-Educational project that demonstrates **horizontal auto scaling** on your machine: a Python autoscaler watches real Flask app containers, adds or removes Docker instances based on load, and keeps an **Nginx** load balancer in sync—no cloud or Kubernetes required.
+Run a **real** auto-scaling stack on your laptop: Flask app instances in Docker, **Nginx** load balancing, and a Python **autoscaler** that creates and stops containers based on load. Includes a web **dashboard** with live metrics and an event log.
+
+---
+
+## Demo video (dashboard & scale in / out)
+
+Recorded walkthrough of the visualizer: instance cards, utilization bars, traffic slider, and containers scaling up and down.
+
+**After you clone the repo**, open the file locally:
+
+- **File:** [`docs/scale-inout.mp4`](docs/scale-inout.mp4)  
+- Or play from the project root: `docs/scale-inout.mp4`
+
+<video controls src="docs/scale-inout.mp4" width="100%">
+  Your browser does not support embedded video. Open <a href="docs/scale-inout.mp4">docs/scale-inout.mp4</a> after cloning.
+</video>
+
+> On GitHub’s web UI, if the player does not load, use **Raw** on the file page or download [`docs/scale-inout.mp4`](docs/scale-inout.mp4).
+
+---
+
+## Run it in 3 steps (after clone)
+
+### 1. Prerequisites
+
+| Requirement | Notes |
+|-------------|--------|
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows / macOS) or **Docker Engine** (Linux) | Must be **running** before the next step |
+| **Docker Compose v2** | `docker compose version` (not legacy `docker-compose` only) |
+
+**Windows:** Use Docker Desktop with **Linux containers** (WSL2 backend recommended).
+
+### 2. Get the project
+
+```bash
+git clone <YOUR_REPO_URL>
+cd auto-scaler
+```
+
+If you downloaded a ZIP instead of cloning, unzip it and `cd` into the folder that contains `docker-compose.yml`.
+
+### 3. Configure and start
+
+**Linux / macOS / Git Bash:**
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+```
+
+**Windows (PowerShell):**
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build -d
+```
+
+**Foreground mode** (logs in the terminal; stop with `Ctrl+C`):
+
+```bash
+docker compose up --build
+```
+
+### 4. Open the dashboard
+
+| URL | Purpose |
+|-----|---------|
+| **http://localhost:8080** | Dashboard (metrics, traffic, config, event log) |
+| **http://localhost:8080/proxy/** | Load-balanced app (used by the traffic generator) |
+
+Change the host port in `.env` with `HOST_PORT=...` if **8080** is already in use, then run `docker compose up --build -d` again.
+
+**Verify containers:**
+
+```bash
+docker compose ps
+docker ps --filter label=autoscale.role=app
+```
+
+You should see **app-1** and **app-2** plus **autoscale-nginx** and **autoscale-autoscaler**.
+
+---
+
+## Try scaling (2-minute test)
+
+1. Open **http://localhost:8080**.
+2. Click **Increase load** (or move the slider up) until utilization stays high — watch the **event log** for `HIGH LOAD DETECTED` and new instances (`app-3`, …).
+3. Click **Stop traffic** or lower the slider — after the cooldown (~10s), look for `LOW LOAD DETECTED` or `EXCESS CAPACITY DETECTED` and scale-in.
+4. Optional: `docker ps` in a terminal to see containers appear and disappear.
+
+See the [demo video](#demo-video-dashboard--scale-in--out) above for the full visual flow.
+
+---
 
 ## What is auto scaling?
 
-**Auto scaling** adjusts how many copies of an application run based on demand. When load rises, the system **scales out** (adds instances). When load falls, it **scales in** (removes extra instances).
+**Auto scaling** changes how many application copies run based on demand.
 
 | Term | Meaning |
 |------|---------|
-| **Scale out** | Start more application containers to handle higher traffic |
-| **Scale in** | Stop extra containers when traffic drops or the cluster has **excess capacity** (never below the configured minimum) |
+| **Scale out** | Start more containers when load is high |
+| **Scale in** | Remove extra containers when load drops or the cluster has **excess capacity** (never below **minimum**) |
 
-This demo uses **real** Docker containers and **real** HTTP traffic—not a frontend-only simulation.
+This project uses **real** Docker containers and HTTP traffic—not a UI-only simulation.
 
 ## Architecture
 
@@ -44,10 +136,10 @@ flowchart TB
 
 ### Components
 
-1. **Flask app (`app/`)** — One container = one instance. Tracks requests in a rolling **60-second** window. Capacity defaults to **20 requests/minute** per instance; overload returns **HTTP 429**.
-2. **Nginx (`nginx/`)** — Single public entry (port **8080**). Round-robin to `upstream backend`. Upstream list lives in `shared/upstream.conf` and is **not** hardcoded in `nginx.conf`.
-3. **Autoscaler (`autoscaler/`)** — Polls `/stats` on every labelled app container, computes average utilization, scales out/in, rewrites upstream, runs `nginx -s reload` in the Nginx container. Exposes REST + **Server-Sent Events** for the dashboard.
-4. **Frontend (`frontend/`)** — Dashboard metrics, traffic controls, min/max config, live event log.
+1. **Flask (`app/`)** — Rolling **60s** request window; default **20 req/min** per instance (configurable); **429** when overloaded. `/stats` is excluded from load (monitoring only).
+2. **Nginx (`nginx/`)** — Public port **8080**: static dashboard, `/proxy/` → apps, `/api/` → autoscaler. Upstream list in `shared/upstream.conf`.
+3. **Autoscaler (`autoscaler/`)** — Scales on utilization and **cluster headroom**, rewrites upstream, reloads Nginx. REST + SSE for the dashboard.
+4. **Frontend (`frontend/`)** — Dashboard UI.
 
 ### Default scaling policy
 
@@ -56,163 +148,93 @@ flowchart TB
 | Minimum instances | 2 |
 | Maximum instances | 5 |
 | Capacity per instance | 20 req/min |
-| Scale-out threshold | 80% average utilization |
-| Scale-in threshold | 20% average utilization, **or** total load fits on one fewer instance within the scale-out headroom (80% of capacity per instance) |
-| Scaling cooldown | 10 seconds |
+| Scale-out | Average utilization **> 80%** |
+| Scale-in | Average **< 20%**, **or** total load fits on one fewer instance (≤ 80% of each remaining instance’s capacity) |
+| Cooldown | **10 seconds** between scaling actions |
 
-The autoscaler never runs more than **max** instances or fewer than **min**. Scale-in only removes instances **above** the minimum (e.g. `app-3`, `app-4`, …).
-
-## Prerequisites
-
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine (Linux)
-- Docker Compose v2 (`docker compose`)
-
-## Quick start
-
-```bash
-cd auto-scaler
-cp .env.example .env
-docker compose up --build -d
-```
-
-Open the dashboard: **http://localhost:8080**
-
-Only port **8080** is published on the host (Nginx). App containers and the autoscaler are internal to the Docker network `autoscale-net`.
-
-### Security note (local dev only)
-
-The autoscaler mounts **`/var/run/docker.sock`** so it can create and remove containers. That grants significant control over the host Docker daemon. Use this project **only** on trusted development machines.
+The autoscaler mounts **`/var/run/docker.sock`** (local dev only—see [Security](#security-local-dev-only)).
 
 ## Using the dashboard
 
-### Overview
+- **Overview** — Instance count, capacity, requests in last 60s, scaling status (`steady`, `at max`, etc.).
+- **Traffic controls** — Slider / buttons send requests to **`/proxy/`** through Nginx.
+- **Configuration** — Set min/max instances → **Apply configuration**.
+- **Event log** — Live autoscaler messages (SSE).
 
-Shows active instance count, min/max limits, total capacity, aggregate requests in the last 60 seconds, average utilization, and scaling status.
-
-### Traffic controls
-
-- **Increase load / Decrease load / slider** — Sets how many requests per second the browser sends to **`/proxy/`** (through Nginx to the app pool).
-- **Stop traffic** — Sets rate to 0.
-
-Use **Increase load** until average utilization stays above **80%** to trigger scale-out. Lower traffic and wait for sustained low utilization (below **20%** for at least the cooldown) to trigger scale-in.
-
-### Configuration
-
-Set **minimum** and **maximum** instances and click **Apply configuration**. Values are sent to the autoscaler (`POST /api/config`) and enforced on the next scaling decisions.
-
-### Event log
-
-Live lines from the autoscaler (SSE `/api/events`), for example:
+Example log lines:
 
 ```
 [23:11:05] HIGH LOAD DETECTED.
-[23:11:05] Average utilization: 95%.
-[23:11:06] Creating new instance...
 [23:11:08] Instance app-3 started.
-[23:11:09] Updating Nginx configuration.
 [23:11:09] Nginx reloaded successfully.
+[23:12:30] EXCESS CAPACITY DETECTED.
+[23:12:45] Terminating scaled instance app-5.
 ```
-
-## How Nginx stays in sync
-
-1. Autoscaler lists containers with label `autoscale.role=app`.
-2. It writes `shared/upstream.conf`:
-
-   ```nginx
-   upstream backend {
-       server app-1:5000;
-       server app-2:5000;
-   }
-   ```
-
-3. After changes, it runs `nginx -t` and `nginx -s reload` **inside** the `autoscale-nginx` container (graceful reload).
-
-New instances are polled at `/health` before being added to upstream. On scale-in, Nginx is updated **before** the container is stopped.
-
-## Walkthrough experiments
-
-### Experiment 1: Initial state
-
-```bash
-docker compose up --build -d
-docker ps --filter label=autoscale.role=app
-```
-
-Expect **app-1** and **app-2** running. Dashboard shows 2 instances.
-
-### Experiment 2: Scale out
-
-1. Open http://localhost:8080
-2. Click **Increase load** several times (or set slider ≥ 15–20 req/s).
-3. Watch the event log for `HIGH LOAD DETECTED` and `Instance app-3 started`.
-4. Confirm: `docker ps` shows `app-3`.
-5. Hit Nginx: `curl http://localhost:8080/proxy/` repeatedly—responses show different `instance_name` values.
-
-### Experiment 3: Scale further
-
-Keep increasing traffic. New containers `app-4`, `app-5` may appear. At 5 instances, logs show **Maximum instance limit reached**.
-
-### Experiment 4: Scale in
-
-Click **Stop traffic** or **Decrease load**. After utilization stays low and cooldowns elapse, watch `LOW LOAD DETECTED` and termination of `app-5`, `app-4`, etc. **app-1** and **app-2** remain.
-
-## Flask API (per instance)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | Name, ID, requests in last 60s, capacity, utilization % |
-| `GET /health` | Health JSON |
-| `GET /stats` | Same metrics as `/` |
-| (overload) | **429** when rolling 60s count ≥ capacity |
-
-Instances are reached via Nginx at `http://localhost:8080/proxy/` or directly on the Docker network at `http://app-1:5000/`.
-
-## Autoscaler API (via Nginx)
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/status` | Cluster overview |
-| GET | `/api/instances` | Per-container stats |
-| POST | `/api/config` | `{ "min_instances", "max_instances" }` |
-| GET | `/api/events` | SSE event stream |
 
 ## Environment variables
 
-Copy `.env.example` to `.env`:
+Created from `.env.example` → `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOST_PORT` | 8080 | Host port for Nginx |
+| `HOST_PORT` | 8080 | Published Nginx port |
 | `MIN_INSTANCES` | 2 | Minimum app containers |
 | `MAX_INSTANCES` | 5 | Maximum app containers |
 | `CAPACITY_PER_MINUTE` | 20 | Per-instance capacity |
-| `SCALE_OUT_THRESHOLD` | 80 | Avg utilization % to scale out |
-| `SCALE_IN_THRESHOLD` | 20 | Avg utilization % to scale in |
-| `SCALING_COOLDOWN` | 10 | Seconds between scaling actions / low-load wait |
-| `POLL_INTERVAL` | 2 | Autoscaler poll interval (seconds) |
+| `SCALE_OUT_THRESHOLD` | 80 | Scale-out utilization % |
+| `SCALE_IN_THRESHOLD` | 20 | Low-utilization scale-in % |
+| `SCALING_COOLDOWN` | 10 | Cooldown (seconds) |
+| `POLL_INTERVAL` | 2 | Autoscaler poll interval |
 
-## Useful Docker commands
+After editing `.env`, run `docker compose up --build -d` again.
+
+## Detailed experiments
+
+### Experiment 1 — Initial state
+
+`docker compose up --build -d` → dashboard shows **2** instances; `docker ps` shows **app-1**, **app-2**.
+
+### Experiment 2 — Scale out
+
+Increase traffic until utilization > 80% → **app-3** (and more) appear; `curl http://localhost:8080/proxy/` shows different `instance_name` values.
+
+### Experiment 3 — Max instances
+
+Keep increasing load → stops at **max**; event log may show **Maximum instance limit reached**.
+
+### Experiment 4 — Scale in
+
+Lower or stop traffic → wait for cooldown → `LOW LOAD DETECTED` or `EXCESS CAPACITY DETECTED` → extra instances removed; **minimum** count kept.
+
+## API reference
+
+**Per instance** (via `/proxy/` or internal network): `GET /`, `GET /health`, `GET /stats`, **429** when overloaded.
+
+**Via Nginx:** `GET /api/status`, `GET /api/instances`, `POST /api/config`, `GET /api/events` (SSE).
+
+## Useful commands
 
 ```bash
 docker compose ps
 docker compose logs -f autoscaler
 docker compose logs -f nginx
 docker ps --filter label=autoscale.role=app
-docker inspect app-3 --format '{{.State.Status}}'
 cat shared/upstream.conf
 ```
 
+**Windows:** use `type shared\upstream.conf` instead of `cat`.
+
 ## Troubleshooting
 
-| Problem | What to check |
-|---------|----------------|
-| Dashboard empty / API errors | `docker compose logs autoscaler`; ensure `autoscale-autoscaler` is running |
-| No scale-out | Traffic may be too low; each instance needs ~16+ requests in 60s for 80% at capacity 20 |
-| Instances stay at 3+ with traffic at 0 | Old app images counted autoscaler `/stats` polls as load; rebuild with `docker compose up --build -d`. Scale-in needs avg utilization below 20% for the full cooldown (10s) after the rolling 60s window clears |
-| One instance shows high requests, others 0 | Usually leftover traffic in the 60s window on that instance, or an old build where `/stats` polls filled the counter |
-| Scale-out fails | `docker compose logs autoscaler`; confirm Docker socket mount and image `autoscale-app:latest` exists (`docker images`) |
-| Nginx 502 | Upstream lists a dead host; check `shared/upstream.conf` and app container health |
-| Windows socket issues | Use Docker Desktop with Linux containers; WSL2 backend recommended |
+| Problem | Fix |
+|---------|-----|
+| `docker compose` not found | Install Docker Desktop / Engine; use `docker compose`, not only `docker-compose` |
+| Port 8080 in use | Set `HOST_PORT=8081` in `.env`, restart compose |
+| Dashboard empty | `docker compose logs autoscaler`; ensure all services are `Up` |
+| No scale-out | Raise traffic; need ~80% utilization per instance (depends on `CAPACITY_PER_MINUTE`) |
+| Won’t scale in after lowering traffic | Wait **60s** for rolling window + **10s** cooldown; or check **EXCESS CAPACITY** logic with your capacity settings |
+| Stuck at 3+ instances with 0 traffic | `docker compose up --build -d` (old builds counted `/stats` as load—fixed in current `app.py`) |
+| Nginx 502 | `docker compose logs nginx`; check `shared/upstream.conf` matches running `app-*` containers |
 
 ## Stop and clean up
 
@@ -220,22 +242,27 @@ cat shared/upstream.conf
 docker compose down
 ```
 
-Remove dynamically created containers if any remain:
+Remove scaled instances if needed:
 
 ```bash
-docker rm -f app-3 app-4 app-5 2>/dev/null
+docker rm -f app-3 app-4 app-5
 ```
 
-Optional full cleanup including images:
+Full local image cleanup:
 
 ```bash
-docker compose down --rmi local -v
+docker compose down --rmi local
 ```
+
+## Security (local dev only)
+
+The autoscaler needs the Docker socket to create/remove containers. Use only on a **trusted** development machine.
 
 ## Project layout
 
 ```
 ├── docker-compose.yml
+├── docs/scale-inout.mp4    # demo video
 ├── app/
 ├── autoscaler/
 ├── nginx/
