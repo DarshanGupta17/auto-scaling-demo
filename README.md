@@ -2,21 +2,6 @@
 
 Run a **real** auto-scaling stack on your laptop: Flask app instances in Docker, **Nginx** load balancing, and a Python **autoscaler** that creates and stops containers based on load. Includes a web **dashboard** with live metrics and an event log.
 
----
-
-## Demo video (dashboard & scale in / out)
-
-Recorded walkthrough of the visualizer: instance cards, utilization bars, traffic slider, and containers scaling up and down.
-
-<video controls muted playsinline width="100%" src="https://pub-e1f0ebf03c3f42028d5d4a6e994206a9.r2.dev/scale%20INOUT.mp4">
-  Your browser does not support embedded video.
-  <a href="https://pub-e1f0ebf03c3f42028d5d4a6e994206a9.r2.dev/scale%20INOUT.mp4">Open the demo video</a> in a new tab.
-</video>
-
-[Open demo video in full screen](https://pub-e1f0ebf03c3f42028d5d4a6e994206a9.r2.dev/scale%20INOUT.mp4) · video plays **muted** by default; use the player controls to unmute.
-
----
-
 ## Run it in 3 steps (after clone)
 
 ### 1. Prerequisites
@@ -85,8 +70,6 @@ You should see **app-1** and **app-2** plus **autoscale-nginx** and **autoscale-
 2. Click **Increase load** (or move the slider up) until utilization stays high — watch the **event log** for `HIGH LOAD DETECTED` and new instances (`app-3`, …).
 3. Click **Stop traffic** or lower the slider — after the cooldown (~10s), look for `LOW LOAD DETECTED` or `EXCESS CAPACITY DETECTED` and scale-in.
 4. Optional: `docker ps` in a terminal to see containers appear and disappear.
-
-See the [demo video](#demo-video-dashboard--scale-in--out) above for the full visual flow.
 
 ---
 
@@ -258,7 +241,6 @@ The autoscaler needs the Docker socket to create/remove containers. Use only on 
 
 ```
 ├── docker-compose.yml
-├── docs/                   # optional local assets
 ├── app/
 ├── autoscaler/
 ├── nginx/
